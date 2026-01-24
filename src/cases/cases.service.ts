@@ -13,6 +13,11 @@ import { UserRole } from '../auth/roles.enum';
 export class CasesService {
   constructor(private prisma: PrismaService) {}
 
+  // Helper to check role
+  private isRole(user: AuthenticatedUser, role: UserRole): boolean {
+    return user.role.name === (role as string);
+  }
+
   // Assignment rules
   private canAssign(assignerRole: UserRole, targetRole: UserRole): boolean {
     if (assignerRole === UserRole.ADMIN) {
@@ -40,6 +45,125 @@ export class CasesService {
         statusId: status!.id,
       },
     });
+  }
+
+  // Get All Cases (filtered by role)
+  async findAll(user: AuthenticatedUser) {
+    // Admin & Supervisor can see all cases
+    if (
+      this.isRole(user, UserRole.ADMIN) ||
+      this.isRole(user, UserRole.SUPERVISOR)
+    ) {
+      return this.prisma.case.findMany({
+        include: {
+          creator: {
+            select: { id: true, name: true, role: true },
+          },
+          assignedUser: {
+            select: { id: true, name: true, role: true },
+          },
+          status: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+    }
+
+    // Agent can only see cases assigned to them
+    return this.prisma.case.findMany({
+      where: {
+        assignedTo: user.id,
+      },
+      include: {
+        creator: {
+          select: { id: true, name: true, role: true },
+        },
+        assignedUser: {
+          select: { id: true, name: true, role: true },
+        },
+        status: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  // Get Case by ID
+  async findOne(caseId: string, user: AuthenticatedUser) {
+    const caseItem = await this.prisma.case.findUnique({
+      where: { id: caseId },
+      include: {
+        creator: {
+          select: { id: true, name: true, role: true },
+        },
+        assignedUser: {
+          select: { id: true, name: true, role: true },
+        },
+        status: true,
+      },
+    });
+
+    if (!caseItem) {
+      throw new NotFoundException('Case not found');
+    }
+
+    // Agent can only view cases assigned to them
+    if (this.isRole(user, UserRole.AGENT) && caseItem.assignedTo !== user.id) {
+      throw new ForbiddenException('You can only view cases assigned to you');
+    }
+
+    return caseItem;
+  }
+
+  // Get User Statistics
+  async getUserStats(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Get all statuses
+    const statuses = await this.prisma.caseStatus.findMany();
+
+    // Count cases by status for this user
+    const stats = await Promise.all(
+      statuses.map(async (status) => {
+        const count = await this.prisma.case.count({
+          where: {
+            assignedTo: userId,
+            statusId: status.id,
+          },
+        });
+
+        return {
+          status: status.name,
+          count,
+        };
+      }),
+    );
+
+    // Total cases assigned
+    const totalAssigned = await this.prisma.case.count({
+      where: { assignedTo: userId },
+    });
+
+    // Total cases created (if user is admin/supervisor)
+    const totalCreated = await this.prisma.case.count({
+      where: { createdBy: userId },
+    });
+
+    return {
+      userId,
+      userName: user.name,
+      totalAssigned,
+      totalCreated,
+      byStatus: stats,
+    };
   }
 
   //Assign Case

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -23,6 +24,21 @@ export class CasesController {
   @Roles(UserRole.ADMIN, UserRole.SUPERVISOR)
   create(@Req() req: Request, @Body() dto: CreateCaseDto) {
     return this.casesService.createCase(req.user!, dto);
+  }
+
+  @Get()
+  findAll(@Req() req: Request) {
+    return this.casesService.findAll(req.user!);
+  }
+
+  @Get('stats/:userId')
+  getUserStats(@Param('userId', ParseUUIDPipe) userId: string) {
+    return this.casesService.getUserStats(userId);
+  }
+
+  @Get(':id')
+  findOne(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
+    return this.casesService.findOne(id, req.user!);
   }
 
   @Patch(':id/assign')
