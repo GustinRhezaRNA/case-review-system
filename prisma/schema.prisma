@@ -57,5 +57,9 @@ model Case {
   assignedUser  User?      @relation("AssignedCases", fields: [assignedTo], references: [id])
   status        CaseStatus @relation(fields: [statusId], references: [id])
   
+  @@index([createdBy])
+  @@index([assignedTo])
+  @@index([statusId])
+  @@index([createdAt])
   @@map("cases")
 }
