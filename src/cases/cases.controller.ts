@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -15,6 +16,7 @@ import { AssignCaseDto } from './dto/assign-case.dto';
 import { UserRole } from '../auth/roles.enum';
 import { Roles } from '../auth/roles.decorator';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { CaseFilterDto } from './dto/case-filter.dto';
 
 @Controller('cases')
 export class CasesController {
@@ -27,10 +29,14 @@ export class CasesController {
   }
 
   @Get()
-  findAll(@Req() req: Request) {
-    return this.casesService.findAll(req.user!);
+  findAll(@Req() req: Request, @Query() filterDto: CaseFilterDto) {
+    return this.casesService.findAll(req.user!, filterDto);
   }
 
+  @Get('statuses') // ← HARUS SEBELUM :id
+  getStatuses() {
+    return this.casesService.getStatuses();
+  }
   @Get('stats/:userId')
   getUserStats(@Param('userId', ParseUUIDPipe) userId: string) {
     return this.casesService.getUserStats(userId);

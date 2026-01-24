@@ -8,6 +8,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { AuthenticatedUser } from '../auth/authenticated-user.type';
 import { UserRole } from '../auth/roles.enum';
+import { CaseFilterDto, PaginatedResponse } from './dto/case-filter.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class CasesService {
@@ -48,33 +50,46 @@ export class CasesService {
   }
 
   // Get All Cases (filtered by role)
-  async findAll(user: AuthenticatedUser) {
-    // Admin & Supervisor can see all cases
-    if (
+  async findAll(
+    user: AuthenticatedUser,
+    filterDto: CaseFilterDto,
+  ): Promise<PaginatedResponse<any>> {
+    const { page = 1, limit = 10, status, search } = filterDto;
+    const skip = (page - 1) * limit;
+
+    // Base where clause with proper Prisma type
+    const whereClause: Prisma.CaseWhereInput =
       this.isRole(user, UserRole.ADMIN) ||
       this.isRole(user, UserRole.SUPERVISOR)
-    ) {
-      return this.prisma.case.findMany({
-        include: {
-          creator: {
-            select: { id: true, name: true, role: true },
-          },
-          assignedUser: {
-            select: { id: true, name: true, role: true },
-          },
-          status: true,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        ? {}
+        : { assignedTo: user.id };
+
+    // Add status filter
+    if (status) {
+      const statusObj = await this.prisma.caseStatus.findUnique({
+        where: { name: status },
       });
+      if (statusObj) {
+        whereClause.statusId = statusObj.id;
+      }
     }
 
-    // Agent can only see cases assigned to them
-    return this.prisma.case.findMany({
-      where: {
-        assignedTo: user.id,
-      },
+    // Add search filter (search in title and description)
+    if (search) {
+      whereClause.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Get total count with filters
+    const total = await this.prisma.case.count({
+      where: whereClause,
+    });
+
+    // Get paginated data with filters
+    const data = await this.prisma.case.findMany({
+      where: whereClause,
       include: {
         creator: {
           select: { id: true, name: true, role: true },
@@ -86,6 +101,31 @@ export class CasesService {
       },
       orderBy: {
         createdAt: 'desc',
+      },
+      skip,
+      take: limit,
+    });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
+  }
+
+  // Get All Case Statuses
+  async getStatuses() {
+    return this.prisma.caseStatus.findMany({
+      orderBy: {
+        id: 'asc',
       },
     });
   }
