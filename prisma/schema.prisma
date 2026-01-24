@@ -1,0 +1,61 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id    Int    @id @default(autoincrement()) @map("id") @db.SmallInt
+  name  String @unique @db.VarChar(255)
+  
+  users User[]
+  
+  @@map("roles")
+}
+
+model User {
+  id      String @id @default(uuid()) @map("id") @db.Uuid
+  roleId  Int    @map("role_id") @db.SmallInt
+  name    String @db.VarChar(255)
+  
+  role          Role   @relation(fields: [roleId], references: [id])
+  createdCases  Case[] @relation("CreatedCases")
+  assignedCases Case[] @relation("AssignedCases")
+  
+  @@map("users")
+}
+
+model CaseStatus {
+  id   Int    @id @default(autoincrement()) @map("id") @db.SmallInt
+  name String @unique @db.VarChar(255)
+  
+  cases Case[]
+  
+  @@map("case_statuses")
+}
+
+model Case {
+  id          String    @id @default(uuid()) @map("id") @db.Uuid
+  createdBy   String    @map("created_by") @db.Uuid
+  assignedTo  String?   @map("assigned_to") @db.Uuid
+  title       String    @db.VarChar(255)
+  statusId    Int       @map("status_id") @db.SmallInt
+  description String    @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamp()
+  
+  creator       User       @relation("CreatedCases", fields: [createdBy], references: [id])
+  assignedUser  User?      @relation("AssignedCases", fields: [assignedTo], references: [id])
+  status        CaseStatus @relation(fields: [statusId], references: [id])
+  
+  @@map("cases")
+}
