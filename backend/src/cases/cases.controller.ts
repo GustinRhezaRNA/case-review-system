@@ -20,7 +20,7 @@ import { CaseFilterDto } from './dto/case-filter.dto';
 
 @Controller('cases')
 export class CasesController {
-  constructor(private casesService: CasesService) {}
+  constructor(private casesService: CasesService) { }
 
   @Post()
   @Roles(UserRole.ADMIN, UserRole.SUPERVISOR)
@@ -36,6 +36,11 @@ export class CasesController {
   @Get('statuses') // ← HARUS SEBELUM :id
   getStatuses() {
     return this.casesService.getStatuses();
+  }
+
+  @Get('status-counts')
+  getStatusCounts() {
+    return this.casesService.getStatusCounts();
   }
   @Get('stats/:userId')
   getUserStats(@Param('userId', ParseUUIDPipe) userId: string) {

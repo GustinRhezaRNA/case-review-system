@@ -13,7 +13,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class CasesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   // Helper to check role
   private isRole(user: AuthenticatedUser, role: UserRole): boolean {
@@ -60,7 +60,7 @@ export class CasesService {
     // Base where clause with proper Prisma type
     const whereClause: Prisma.CaseWhereInput =
       this.isRole(user, UserRole.ADMIN) ||
-      this.isRole(user, UserRole.SUPERVISOR)
+        this.isRole(user, UserRole.SUPERVISOR)
         ? {}
         : { assignedTo: user.id };
 
@@ -128,6 +128,31 @@ export class CasesService {
         id: 'asc',
       },
     });
+  }
+
+  // Get case counts by status
+  async getStatusCounts() {
+    const statuses = await this.prisma.caseStatus.findMany();
+
+    const counts = await Promise.all(
+      statuses.map(async (status) => {
+        const count = await this.prisma.case.count({
+          where: { statusId: status.id },
+        });
+        return {
+          status: status.name,
+          count,
+        };
+      }),
+    );
+
+    // Total cases
+    const total = await this.prisma.case.count();
+
+    return {
+      total,
+      byStatus: counts,
+    };
   }
 
   // Get Case by ID
