@@ -15,15 +15,61 @@ import {
     CheckCircle,
     AlertCircle,
     Eye,
-    Flag,
-    Star,
     ChevronDown,
     BarChart3,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getStatusCounts, getUserStats } from '@/api/case';
+import { useAuth } from '@/hooks/use-auth';
+
+// Status name mapping from API to display label
+const STATUS_DISPLAY_MAP: Record<string, { label: string; icon: typeof AlertCircle }> = {
+    'TO_BE_REVIEWED': { label: 'To Review', icon: AlertCircle },
+    'REVIEW_SUBMITTED': { label: 'Review Submitted', icon: CheckCircle },
+    'OBSERVATION': { label: 'Observation', icon: Eye },
+    'COMPLETE': { label: 'Complete', icon: CheckCircle },
+};
+
+interface StatusCount {
+    status: string;
+    count: number;
+}
+
+interface StatusCountsResponse {
+    total: number;
+    byStatus: StatusCount[];
+}
 
 export function AppSidebar() {
+    const { user } = useAuth();
     const [expandedSections, setExpandedSections] = useState<string[]>(['Progress']);
+    const [statusCounts, setStatusCounts] = useState<StatusCountsResponse | null>(null);
+    const [assignedCount, setAssignedCount] = useState<number>(0);
+    const [userStats, setUserStats] = useState<any>(null);
+
+
+    useEffect(() => {
+        // Fetch global status counts
+        getStatusCounts()
+            .then((res) => {
+                setStatusCounts(res.data);
+            })
+            .catch((error) => {
+                console.error('Error fetching status counts:', error);
+            });
+
+        // Fetch user specific stats if user exists
+        if (user?.id) {
+            getUserStats(user.id)
+                .then((res) => {
+                    setUserStats(res.data);
+                    setAssignedCount(res.data.totalAssigned);
+                })
+                .catch((error) => {
+                    console.error('Error fetching user stats:', error);
+                });
+        }
+    }, [user?.id]);
 
     const toggleSection = (section: string) => {
         setExpandedSections((prev) =>
@@ -31,30 +77,21 @@ export function AppSidebar() {
         );
     };
 
-    const progressItems = [
-        { label: 'To Review', count: 8, icon: AlertCircle },
-        { label: 'Review Submitted', count: 9, icon: CheckCircle },
-        { label: 'Observation', count: 15, icon: Eye },
-        { label: 'Complete', count: 24, icon: CheckCircle },
-    ];
+    // Build progress items - Use userStats if available, otherwise global defaults
+    const progressSource = userStats?.byStatus || statusCounts?.byStatus || [];
+
+    const progressItems = progressSource.map((item: StatusCount) => {
+        const displayInfo = STATUS_DISPLAY_MAP[item.status] || { label: item.status, icon: AlertCircle };
+        return {
+            label: displayInfo.label,
+            count: item.count,
+            icon: displayInfo.icon,
+            statusKey: item.status.toLowerCase().replace(/_/g, '-'),
+        };
+    });
 
     const otherItems = [
-        { label: 'Assigned', count: 4, icon: BarChart3 },
-        { label: 'Flagged', count: 8, icon: Flag },
-        { label: 'Favorite', count: 9, icon: Star },
-    ];
-
-    const vendors = [
-        { label: 'PTSM Pte Ltd', count: 8 },
-        { label: 'Waste Link Pte Ltd', count: 9 },
-        { label: 'Trueman Pte Ltd', count: 3 },
-        { label: 'Longblue Services', count: 3 },
-        { label: 'Smart Services', count: 5 },
-    ];
-
-    const equipment = [
-        { label: 'Malfunction', count: 5 },
-        { label: 'Unattendence', count: 3 },
+        { label: 'Assigned', count: assignedCount, icon: BarChart3 },
     ];
 
     return (
@@ -62,7 +99,7 @@ export function AppSidebar() {
             <SidebarHeader className="border-b border-border px-4 py-4">
                 <div>
                     <h1 className="text-xl font-bold text-sidebar-foreground">Total Cases</h1>
-                    <p className="text-3xl font-bold text-primary">34</p>
+                    <p className="text-3xl font-bold text-primary">{statusCounts?.total ?? '-'}</p>
                 </div>
             </SidebarHeader>
             <SidebarContent className="px-0">
@@ -87,13 +124,13 @@ export function AppSidebar() {
                                             asChild
                                             className="flex items-center justify-between px-6 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent"
                                         >
-                                            <a href={`/?status=${item.label.toLowerCase().replace(/\s+/g, '-')}`}>
+                                            <a href={`/dashboard/?status=${item.statusKey}`}>
                                                 <div className="flex items-center gap-2">
                                                     <item.icon className="h-4 w-4" />
                                                     <span>{item.label}</span>
                                                 </div>
                                                 <span className="text-xs font-semibold text-muted-foreground">
-                                                    {item.count}
+                                                    {item.count > 0 ? item.count : ''}
                                                 </span>
                                             </a>
                                         </SidebarMenuSubButton>
@@ -116,7 +153,7 @@ export function AppSidebar() {
                                         <span>{item.label}</span>
                                     </div>
                                     <span className="text-xs font-semibold text-muted-foreground">
-                                        {item.count}
+                                        {item.count > 0 ? item.count : '0'}
                                     </span>
                                 </a>
                             </SidebarMenuButton>
@@ -126,96 +163,6 @@ export function AppSidebar() {
                     {/* Divider */}
                     <div className="my-2 border-t border-border" />
 
-                    {/* Tagged Section */}
-                    <SidebarMenuItem>
-                        <button
-                            onClick={() => toggleSection('Tagged')}
-                            className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-sidebar-foreground hover:bg-sidebar-accent"
-                        >
-                            <span>Tagged</span>
-                            <ChevronDown
-                                className={`h-4 w-4 transition-transform ${expandedSections.includes('Tagged') ? 'rotate-180' : ''
-                                    }`}
-                            />
-                        </button>
-                        {expandedSections.includes('Tagged') && (
-                            <div className="px-4 py-2">
-                                {/* Vendors */}
-                                <button
-                                    onClick={() => toggleSection('Vendors')}
-                                    className="flex w-full items-center justify-between py-2 text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent px-2 rounded"
-                                >
-                                    <span>Vendors</span>
-                                    <ChevronDown
-                                        className={`h-3 w-3 transition-transform ${expandedSections.includes('Vendors') ? 'rotate-180' : ''
-                                            }`}
-                                    />
-                                </button>
-                                {expandedSections.includes('Vendors') && (
-                                    <ul className="space-y-1 pl-2 py-1">
-                                        {vendors.map((vendor) => (
-                                            <li
-                                                key={vendor.label}
-                                                className="flex items-center justify-between text-xs text-muted-foreground hover:text-sidebar-foreground py-1"
-                                            >
-                                                <span className="text-left">• {vendor.label}</span>
-                                                <span className="text-xs">{vendor.count}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-
-                                {/* Equipment */}
-                                <button
-                                    onClick={() => toggleSection('Equipment')}
-                                    className="flex w-full items-center justify-between py-2 text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent px-2 rounded mt-2"
-                                >
-                                    <span>Equipment</span>
-                                    <ChevronDown
-                                        className={`h-3 w-3 transition-transform ${expandedSections.includes('Equipment') ? 'rotate-180' : ''
-                                            }`}
-                                    />
-                                </button>
-                                {expandedSections.includes('Equipment') && (
-                                    <ul className="space-y-1 pl-2 py-1">
-                                        {equipment.map((item) => (
-                                            <li
-                                                key={item.label}
-                                                className="flex items-center justify-between text-xs text-muted-foreground hover:text-sidebar-foreground py-1"
-                                            >
-                                                <span className="text-left">• {item.label}</span>
-                                                <span className="text-xs">{item.count}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-
-                                {/* Operations */}
-                                <button
-                                    onClick={() => toggleSection('Operations')}
-                                    className="flex w-full items-center justify-between py-2 text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent px-2 rounded mt-2"
-                                >
-                                    <span>Operations</span>
-                                    <ChevronDown
-                                        className={`h-3 w-3 transition-transform ${expandedSections.includes('Operations') ? 'rotate-180' : ''
-                                            }`}
-                                    />
-                                </button>
-
-                                {/* Production */}
-                                <button
-                                    onClick={() => toggleSection('Production')}
-                                    className="flex w-full items-center justify-between py-2 text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent px-2 rounded mt-1"
-                                >
-                                    <span>Production</span>
-                                    <ChevronDown
-                                        className={`h-3 w-3 transition-transform ${expandedSections.includes('Production') ? 'rotate-180' : ''
-                                            }`}
-                                    />
-                                </button>
-                            </div>
-                        )}
-                    </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarContent>
         </Sidebar>
