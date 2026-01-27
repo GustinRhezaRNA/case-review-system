@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCaseDto } from './dto/create-case.dto';
+import { AssignCaseDto } from './dto/assign-case.dto';
 import { AuthenticatedUser } from '../auth/authenticated-user.type';
 import { UserRole } from '../auth/roles.enum';
 import { CaseFilterDto, PaginatedResponse } from './dto/case-filter.dto';
@@ -56,8 +57,6 @@ export class CasesService {
   ): Promise<PaginatedResponse<any>> {
     const { page = 1, limit = 10, status, search } = filterDto;
     const skip = (page - 1) * limit;
-
-    // Base where clause with proper Prisma type
     const whereClause: Prisma.CaseWhereInput =
       this.isRole(user, UserRole.ADMIN) ||
         this.isRole(user, UserRole.SUPERVISOR)
@@ -74,7 +73,7 @@ export class CasesService {
       }
     }
 
-    // Add search filter (search in title and description)
+    // Add search filter
     if (search) {
       whereClause.OR = [
         { title: { contains: search, mode: 'insensitive' } },
@@ -82,12 +81,12 @@ export class CasesService {
       ];
     }
 
-    // Get total count with filters
+    // Get total count
     const total = await this.prisma.case.count({
       where: whereClause,
     });
 
-    // Get paginated data with filters
+    // Get paginated data
     const data = await this.prisma.case.findMany({
       where: whereClause,
       include: {
@@ -95,6 +94,9 @@ export class CasesService {
           select: { id: true, name: true, role: true },
         },
         assignedUser: {
+          select: { id: true, name: true, role: true },
+        },
+        assigner: {  
           select: { id: true, name: true, role: true },
         },
         status: true,
@@ -166,6 +168,9 @@ export class CasesService {
         assignedUser: {
           select: { id: true, name: true, role: true },
         },
+        assigner: {  
+          select: { id: true, name: true, role: true },
+        },
         status: true,
       },
     });
@@ -217,16 +222,10 @@ export class CasesService {
       where: { assignedTo: userId },
     });
 
-    // Total cases created (if user is admin/supervisor)
-    const totalCreated = await this.prisma.case.count({
-      where: { createdBy: userId },
-    });
-
     return {
       userId,
       userName: user.name,
       totalAssigned,
-      totalCreated,
       byStatus: stats,
     };
   }
@@ -273,6 +272,19 @@ export class CasesService {
       where: { id: caseId },
       data: {
         assignedTo: targetUser.id,
+        assignedBy: user.id,
+      },
+      include: {
+        creator: {
+          select: { id: true, name: true, role: true },
+        },
+        assignedUser: {
+          select: { id: true, name: true, role: true },
+        },
+        assigner: {
+          select: { id: true, name: true, role: true },
+        },
+        status: true,
       },
     });
   }
@@ -311,6 +323,40 @@ export class CasesService {
       where: { id: caseId },
       data: {
         statusId: status.id,
+      },
+    });
+  }
+
+  // Get Assignable Users (Agent & Supervisor)
+  async getAssignableUsers(user: AuthenticatedUser) {
+    const whereClause: Prisma.UserWhereInput = {};
+
+    if (this.isRole(user, UserRole.ADMIN)) {
+      whereClause.role = {
+        name: {
+          in: [UserRole.AGENT, UserRole.SUPERVISOR],
+        },
+      };
+    } else if (this.isRole(user, UserRole.SUPERVISOR)) {
+      whereClause.role = {
+        name: UserRole.AGENT,
+      };
+    } else {
+      // Agents cannot assign
+      return [];
+    }
+
+    return this.prisma.user.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        role: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
   }

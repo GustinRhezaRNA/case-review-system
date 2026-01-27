@@ -33,7 +33,7 @@ export class CasesController {
     return this.casesService.findAll(req.user!, filterDto);
   }
 
-  @Get('statuses') // ← HARUS SEBELUM :id
+  @Get('statuses') 
   getStatuses() {
     return this.casesService.getStatuses();
   }
@@ -42,6 +42,12 @@ export class CasesController {
   getStatusCounts() {
     return this.casesService.getStatusCounts();
   }
+
+  @Get('users')
+  getAssignableUsers(@Req() req: Request) {
+    return this.casesService.getAssignableUsers(req.user!);
+  }
+  
   @Get('stats/:userId')
   getUserStats(@Param('userId', ParseUUIDPipe) userId: string) {
     return this.casesService.getUserStats(userId);
