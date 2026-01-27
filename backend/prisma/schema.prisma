@@ -30,6 +30,7 @@ model User {
   role          Role   @relation(fields: [roleId], references: [id])
   createdCases  Case[] @relation("CreatedCases")
   assignedCases Case[] @relation("AssignedCases")
+  assignerCases Case[] @relation("CaseAssigner")
   
   @@map("users")
 }
@@ -47,6 +48,7 @@ model Case {
   id          String    @id @default(uuid()) @map("id") @db.Uuid
   createdBy   String    @map("created_by") @db.Uuid
   assignedTo  String?   @map("assigned_to") @db.Uuid
+  assignedBy  String?   @map("assigned_by") @db.Uuid   
   title       String    @db.VarChar(255)
   statusId    Int       @map("status_id") @db.SmallInt
   description String    @db.Text
@@ -55,10 +57,12 @@ model Case {
   
   creator       User       @relation("CreatedCases", fields: [createdBy], references: [id])
   assignedUser  User?      @relation("AssignedCases", fields: [assignedTo], references: [id])
+  assigner      User?      @relation("CaseAssigner", fields: [assignedBy], references: [id]) 
   status        CaseStatus @relation(fields: [statusId], references: [id])
   
   @@index([createdBy])
   @@index([assignedTo])
+  @@index([assignedBy])  // ← TAMBAH INI
   @@index([statusId])
   @@index([createdAt])
   @@map("cases")
