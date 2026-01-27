@@ -21,7 +21,7 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: case_review_backend
     restart: always
