@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/select';
 import {
     ArrowLeft,
-    Trash2,
     Star,
     Flag,
     ChevronLeft,
@@ -23,7 +22,10 @@ import {
     Eye,
 } from 'lucide-react';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getCase, getAssignableUsers, assignCase, updateStatus } from '@/api/case';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/use-auth';
 
 interface CaseDetailProps {
     id: string;
@@ -47,21 +49,110 @@ const mockComments = [
 ];
 
 export function CaseDetail({ id }: CaseDetailProps) {
+    const { user } = useAuth();
+    const [caseData, setCaseData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [users, setUsers] = useState<any[]>([]);
     const [comment, setComment] = useState('');
+    const [updating, setUpdating] = useState(false);
+
+    // Draft states for deferred submission
+    const [draftStatus, setDraftStatus] = useState<string>('');
+    const [draftAssignee, setDraftAssignee] = useState<string>('unassigned');
+
+    useEffect(() => {
+        if (!id) return;
+        setLoading(true);
+
+        Promise.all([
+            getCase(id),
+            getAssignableUsers()
+        ])
+            .then(([caseRes, usersRes]) => {
+                setCaseData(caseRes.data);
+                setUsers(usersRes.data);
+                // Initialize drafts
+                setDraftStatus(caseRes.data.status?.name || 'TO_BE_REVIEWED');
+                setDraftAssignee(caseRes.data.assignedTo || 'unassigned');
+            })
+            .catch((err) => console.error(err))
+            .finally(() => setLoading(false));
+    }, [id]);
+
+    const handleStatusChange = (value: string) => {
+        setDraftStatus(value);
+    };
+
+    const handleAssignChange = (value: string) => {
+        setDraftAssignee(value);
+    };
+
+    const handleSubmit = async () => {
+        if (!caseData) return;
+        setUpdating(true);
+
+        const promises = [];
+
+        // Check Status Change
+        if (draftStatus && draftStatus !== caseData.status?.name) {
+            promises.push(updateStatus(caseData.id, draftStatus));
+        }
+
+        // Check Assignment Change
+        const currentAssigneeId = caseData.assignedTo || 'unassigned';
+        if (draftAssignee && draftAssignee !== currentAssigneeId) {
+            if (draftAssignee !== 'unassigned') {
+                promises.push(assignCase(caseData.id, draftAssignee));
+            }
+        }
+
+        try {
+            if (promises.length > 0) {
+                await Promise.all(promises);
+                // Refetch to sync state
+                const res = await getCase(id);
+                setCaseData(res.data);
+                setDraftStatus(res.data.status?.name || 'TO_BE_REVIEWED');
+                setDraftAssignee(res.data.assignedTo || 'unassigned');
+                alert('Changes saved successfully');
+            }
+        } catch (error) {
+            console.error('Failed to save changes:', error);
+            alert('Failed to save changes');
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const timelineSteps = [
+        { step: 1, label: 'To Review', status: 'TO_BE_REVIEWED' },
+        { step: 2, label: 'Review', status: 'REVIEW_SUBMITTED' },
+        { step: 3, label: 'Observation', status: 'OBSERVATION' },
+        { step: 4, label: 'Complete', status: 'COMPLETE' },
+    ];
+
+    const getCurrentStepIndex = (status: string) => {
+        return timelineSteps.findIndex(s => s.status === status);
+    };
+
+    if (loading) return <div>Loading...</div>;
+    if (!caseData) return <div>Case not found</div>;
+
+    const currentStepIndex = getCurrentStepIndex(caseData.status?.name);
 
     return (
         <div className="flex flex-col h-full overflow-hidden">
             {/* Header with Back Button */}
             <div className="border-b border-border bg-card p-4 md:p-6">
-                <a href="/" className="flex items-center gap-2 text-primary hover:text-primary/80 mb-4">
+                <a href="/dashboard" className="flex items-center gap-2 text-primary hover:text-primary/80 mb-4">
                     <ArrowLeft className="h-4 w-4" />
                     <span className="text-sm font-medium">Back to List</span>
                 </a>
 
                 <div className="flex items-start justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold text-foreground mb-1">Review Submitted</h1>
-                        <p className="text-sm text-muted-foreground">Case ID: #2333333</p>
+                        <h1 className="text-2xl font-bold text-foreground mb-1">{caseData.title}</h1>
+                        <p className="text-sm text-muted-foreground">Case ID: #{caseData.id.slice(0, 6)}</p>
                     </div>
 
                     <div className="flex gap-2">
@@ -84,47 +175,38 @@ export function CaseDetail({ id }: CaseDetailProps) {
                         <Card className="p-6">
                             <h2 className="font-bold text-foreground mb-4">Progress</h2>
                             <div className="space-y-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                                        1
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="font-semibold text-foreground">To Review</p>
-                                    </div>
-                                </div>
+                                {timelineSteps.map((step, index) => {
+                                    const isCompleted = index <= currentStepIndex;
 
-                                <div className="ml-4 h-8 border-l-2 border-border" />
-
-                                <div className="flex items-center gap-4">
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                                        2
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="font-semibold text-foreground">Review</p>
-                                    </div>
-                                </div>
-
-                                <div className="ml-4 h-8 border-l-2 border-border" />
-
-                                <div className="flex items-center gap-4">
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                                        3
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="font-semibold text-foreground">Observation</p>
-                                    </div>
-                                </div>
-
-                                <div className="ml-4 h-8 border-l-2 border-border" />
-
-                                <div className="flex items-center gap-4">
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-bold">
-                                        4
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="font-semibold text-muted-foreground">Complete</p>
-                                    </div>
-                                </div>
+                                    return (
+                                        <div key={step.step}>
+                                            <div className="flex items-center gap-4">
+                                                <div className={cn(
+                                                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold",
+                                                    isCompleted
+                                                        ? "bg-primary text-primary-foreground"
+                                                        : "bg-muted text-muted-foreground"
+                                                )}>
+                                                    {step.step}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className={cn(
+                                                        "font-semibold",
+                                                        isCompleted ? "text-foreground" : "text-muted-foreground"
+                                                    )}>
+                                                        {step.label}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {index < timelineSteps.length - 1 && (
+                                                <div className={cn(
+                                                    "ml-4 h-8 border-l-2",
+                                                    index < currentStepIndex ? "border-primary" : "border-border"
+                                                )} />
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </Card>
 
@@ -145,11 +227,36 @@ export function CaseDetail({ id }: CaseDetailProps) {
                             <div className="space-y-4 text-sm">
                                 <div>
                                     <p className="text-muted-foreground font-semibold mb-1">Authority*</p>
-                                    <p className="text-foreground">Daniel Bakerman</p>
+                                    <p className="text-foreground">{caseData.assigner?.name || '-'}</p>
                                 </div>
                                 <div>
                                     <p className="text-muted-foreground font-semibold mb-1">Assigned</p>
-                                    <p className="text-foreground">Chad Lakefield</p>
+                                    <Select
+                                        value={draftAssignee}
+                                        onValueChange={handleAssignChange}
+                                        // Disabled if:
+                                        // 1. Updating
+                                        // 2. No users to assign to (Agent, or empty list)
+                                        disabled={updating || users.length === 0}
+                                    >
+                                        <SelectTrigger className="w-full bg-background border-border h-8 text-sm">
+                                            <SelectValue placeholder="Select user" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                                            {[
+                                                ...users,
+                                                // Add the currently assigned user if they are not in the list (e.g. ADMIN)
+                                                ...(caseData.assignedUser && !users.find(u => u.id === caseData.assignedUser.id)
+                                                    ? [caseData.assignedUser]
+                                                    : [])
+                                            ].map((user) => (
+                                                <SelectItem key={user.id} value={user.id}>
+                                                    {user.name} ({user.role?.name || 'Unknown Role'})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div>
                                     <p className="text-muted-foreground font-semibold mb-1">Team</p>
@@ -165,14 +272,24 @@ export function CaseDetail({ id }: CaseDetailProps) {
                                 </div>
                                 <div>
                                     <p className="text-muted-foreground font-semibold mb-2">Status</p>
-                                    <Select defaultValue="complete">
+                                    <Select
+                                        value={draftStatus}
+                                        onValueChange={handleStatusChange}
+                                        disabled={
+                                            updating ||
+                                            user?.role === 'ADMIN' ||
+                                            // Agent/Supervisor can only update if assigned to them
+                                            ((user?.role === 'AGENT' || user?.role === 'SUPERVISOR') && caseData.assignedTo !== user?.id)
+                                        }
+                                    >
                                         <SelectTrigger className="w-full bg-background border-border">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="complete">Complete</SelectItem>
-                                            <SelectItem value="pending">Pending</SelectItem>
-                                            <SelectItem value="in-review">In Review</SelectItem>
+                                            <SelectItem value="TO_BE_REVIEWED">To Review</SelectItem>
+                                            <SelectItem value="REVIEW_SUBMITTED">Review Submitted</SelectItem>
+                                            <SelectItem value="OBSERVATION">Observation</SelectItem>
+                                            <SelectItem value="COMPLETE">Complete</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -266,7 +383,11 @@ export function CaseDetail({ id }: CaseDetailProps) {
 
             {/* Footer */}
             <div className="border-t border-border bg-card p-4 md:p-6">
-                <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                <Button
+                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                    onClick={handleSubmit}
+                    disabled={updating}
+                >
                     Submit
                 </Button>
             </div>
