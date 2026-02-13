@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
-import { getCase, getAssignableUsers, assignCase, updateStatus } from '@/api/case';
+import { getCaseDetail, getAssignableUsers, assignCase, updateCaseStatus } from '@/api/case';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -65,15 +65,15 @@ export function CaseDetail({ id }: CaseDetailProps) {
         setLoading(true);
 
         Promise.all([
-            getCase(id),
+            getCaseDetail(id),
             getAssignableUsers()
         ])
             .then(([caseRes, usersRes]) => {
-                setCaseData(caseRes.data);
-                setUsers(usersRes.data);
+                setCaseData(caseRes);
+                setUsers(usersRes);
                 // Initialize drafts
-                setDraftStatus(caseRes.data.status?.name || 'TO_BE_REVIEWED');
-                setDraftAssignee(caseRes.data.assignedTo || 'unassigned');
+                setDraftStatus(caseRes.status?.name || 'TO_BE_REVIEWED');
+                setDraftAssignee(caseRes.assignedTo || 'unassigned');
             })
             .catch((err) => console.error(err))
             .finally(() => setLoading(false));
@@ -95,7 +95,7 @@ export function CaseDetail({ id }: CaseDetailProps) {
 
         // Check Status Change
         if (draftStatus && draftStatus !== caseData.status?.name) {
-            promises.push(updateStatus(caseData.id, draftStatus));
+            promises.push(updateCaseStatus(caseData.id, draftStatus));
         }
 
         // Check Assignment Change
@@ -110,10 +110,10 @@ export function CaseDetail({ id }: CaseDetailProps) {
             if (promises.length > 0) {
                 await Promise.all(promises);
                 // Refetch to sync state
-                const res = await getCase(id);
-                setCaseData(res.data);
-                setDraftStatus(res.data.status?.name || 'TO_BE_REVIEWED');
-                setDraftAssignee(res.data.assignedTo || 'unassigned');
+                const res = await getCaseDetail(id);
+                setCaseData(res);
+                setDraftStatus(res.status?.name || 'TO_BE_REVIEWED');
+                setDraftAssignee(res.assignedTo || 'unassigned');
                 alert('Changes saved successfully');
             }
         } catch (error) {

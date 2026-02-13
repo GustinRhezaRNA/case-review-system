@@ -76,12 +76,19 @@ export function CaseList() {
   useEffect(() => {
     setLoading(true);
     console.log('Fetching cases for page:', currentPage, 'search:', debouncedSearch, 'status:', statusFilter);
-    getCases(currentPage, itemsPerPage, debouncedSearch || undefined, statusFilter)
+    getCases(
+      {
+        page: currentPage,
+        limit: itemsPerPage,
+        search: debouncedSearch,
+        status: statusFilter,
+      }
+    )
       .then((res) => {
         console.log('API Response:', res);
         console.log('Cases data:', res.data);
 
-        const mapped: CaseCardProps[] = res.data.data.map((c: any) => {
+        const mapped: CaseCardProps[] = res.data.map((c: any) => {
           const dateObj = new Date(c.createdAt);
 
           return {
@@ -99,7 +106,7 @@ export function CaseList() {
 
         console.log('Mapped cases:', mapped);
         setCases(mapped);
-        setTotalPages(res.data.meta.totalPages);
+        setTotalPages(res.meta.totalPages);
       })
       .catch((error) => {
         console.error('Error fetching cases:', error);

@@ -52,7 +52,7 @@ export function AppSidebar() {
         // Fetch global status counts
         getStatusCounts()
             .then((res) => {
-                setStatusCounts(res.data);
+                setStatusCounts(res);
             })
             .catch((error) => {
                 console.error('Error fetching status counts:', error);
@@ -62,8 +62,8 @@ export function AppSidebar() {
         if (user?.id) {
             getUserStats(user.id)
                 .then((res) => {
-                    setUserStats(res.data);
-                    setAssignedCount(res.data.totalAssigned);
+                    setUserStats(res.byStatus);
+                    setAssignedCount(res.totalAssigned);
                 })
                 .catch((error) => {
                     console.error('Error fetching user stats:', error);
@@ -119,12 +119,12 @@ export function AppSidebar() {
                         {expandedSections.includes('Progress') && (
                             <SidebarMenuSub className="px-0">
                                 {progressItems.map((item) => (
-                                    <SidebarMenuSubItem key={item.label} className="px-0">
+                                    <SidebarMenuSubItem key={item.status} className="px-0">
                                         <SidebarMenuSubButton
                                             asChild
                                             className="flex items-center justify-between px-6 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent"
                                         >
-                                            <a href={`/dashboard/?status=${item.statusKey}`}>
+                                            <a href={`/dashboard/?status=${item.status}`}>
                                                 <div className="flex items-center gap-2">
                                                     <item.icon className="h-4 w-4" />
                                                     <span>{item.label}</span>
